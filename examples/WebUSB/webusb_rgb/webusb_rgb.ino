@@ -51,7 +51,7 @@ Adafruit_USBD_WebUSB usb_web;
 
 // Landing Page: scheme (0: http, 1: https), url
 // Page source can be found at https://github.com/hathach/tinyusb-webusb-page/tree/main/webusb-rgb
-WEBUSB_URL_DEF(landingPage, 1 /*https*/, "example.tinyusb.org/webusb-rgb/index.html");
+WEBUSB_URL_DEF(landingPage, 1 /*https*/, "microbit-carlos.github.io/Adafruit_TinyUSB_Arduino/examples/webusb-rgb/index.html");
 
 // the setup function runs once when you press reset or power the board
 void setup() {

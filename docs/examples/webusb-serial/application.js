@@ -38,7 +38,7 @@
 
         port.onReceive = data => {
           let textDecoder = new TextDecoder();
-          console.log(textDecoder.decode(data));
+          console.log(`Received: ${textDecoder.decode(data)}`);
           if (data.getInt8() === 13) {
             currentReceiverLine = null;
           } else {
@@ -79,6 +79,21 @@
       }
     });
 
+
+    document.querySelector('#send-multiple').addEventListener('click', function() {
+      if (!port) return;
+      let alphabet = 'abcdefghijklmnopqrstuvwxyz';
+      let encoder = new TextEncoder('utf-8');
+      let t0 = performance.now();
+      let chain = Promise.resolve();
+      for (let i = 0; i < alphabet.length; i++) {
+        chain = chain.then(() => port.send(encoder.encode(alphabet[i])));
+      }
+      chain.then(() => {
+        console.log('Send alphabet total: ' + (performance.now() - t0).toFixed(3) + ' ms');
+      });
+      addLine('sender_lines', alphabet);
+    });
 
     let commandLine = document.getElementById("command_line");
 

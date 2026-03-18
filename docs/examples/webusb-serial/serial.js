@@ -31,7 +31,10 @@ var serial = {};
 
   serial.Port.prototype.connect = function() {
     let readLoop = () => {
+      let t0 = performance.now();
       this.device_.transferIn(this.endpointIn, 64).then(result => {
+        const t1 = performance.now();
+        console.log(`transferIn: ${(t1 - t0).toFixed(1)} ms; ${result.data.byteLength} bytes`);
         this.onReceive(result.data);
         readLoop();
       }, error => {
@@ -87,6 +90,11 @@ var serial = {};
   };
 
   serial.Port.prototype.send = function(data) {
-    return this.device_.transferOut(this.endpointOut, data);
+    let t0 = performance.now();
+    return this.device_.transferOut(this.endpointOut, data).then(result => {
+      const t1 = performance.now();
+      console.log(`transferOut: ${(t1 - t0).toFixed(1)} ms; ${data.byteLength} bytes`);
+      return result;
+    });
   };
 })();
