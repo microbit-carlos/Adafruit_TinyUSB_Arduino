@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>WebUSB Serial Sample Application</title>
+  </head>
+
+<body>
+  <script>
+var serial = {};
+
+(function() {
+  'use strict';
+
+  serial.getPorts = function() {
+    return navigator.usb.getDevices().then(devices => {
+      return devices.map(device => new serial.Port(device));
+    });
+  };
+
+  serial.requestPort = function() {
+    const filters = [
+      { 'vendorId': 0x2fe3, 'productId': 0x0100 },
+      { 'vendorId': 0x2fe3, 'productId': 0x00a },
+      { 'vendorId': 0x8086, 'productId': 0xF8A1 },
+    ];
+    return navigator.usb.requestDevice({ 'filters': filters }).then(
+      device => new serial.Port(device)
+    );
+  }
+
+  serial.Port = function(device) {
+    this.device_ = device;
+  };
+
+  serial.Port.prototype.connect = function() {
+    let readLoop = () => {
+      const {
+        endpointNumber
+      } = this.device_.configuration.interfaces[0].alternate.endpoints[0]
+      let t0 = performance.now();
+      this.device_.transferIn(endpointNumber, 64).then(result => {
+        console.log('transferIn: ' + (performance.now() - t0).toFixed(1) + ' ms; ' + result.data.byteLength + ' bytes');
+        this.onReceive(result.data);
+        readLoop();
+      }, error => {
+        this.onReceiveError(error);
+      });
+    };
+
+    return this.device_.open()
+        .then(() => {
+          if (this.device_.configuration === null) {
+            return this.device_.selectConfiguration(1);
+          }
+        })
+        .then(() => this.device_.claimInterface(0))
+        .then(() => {
+          readLoop();
+        });
+  };
+
+  serial.Port.prototype.disconnect = function() {
+    return this.device_.close();
+  };
+
+  serial.Port.prototype.send = function(data) {
+    const {
+      endpointNumber
+    } = this.device_.configuration.interfaces[0].alternate.endpoints[1]
+    let t0 = performance.now();
+    return this.device_.transferOut(endpointNumber, data).then(result => {
+      console.log('transferOut: ' + (performance.now() - t0).toFixed(1) + ' ms; ' + data.byteLength + ' bytes');
+      return result;
+    });
+  };
+})();
+
+let port;
+
+function connect() {
+  port.connect().then(() => {
+    port.onReceive = data => {
+      let textDecoder = new TextDecoder();
+      console.log("Received:", textDecoder.decode(data));
+      document.getElementById('output').value += textDecoder.decode(data);
+    }
+    port.onReceiveError = error => {
+      console.error(error);
+      document.querySelector("#connect").style = "visibility: initial";
+      port.disconnect();
+    };
+  });
+}
+
+function send(string) {
+  console.log("sending to serial:" + string.length);
+  if (string.length === 0)
+    return;
+  console.log("sending to serial: [" + string +"]\n");
+
+  let view = new TextEncoder('utf-8').encode(string);
+  console.log(view);
+  if (port) {
+    port.send(view);
+  }
+};
+
+window.onload = _ => {
+  document.querySelector("#connect").onclick = function() {
+    serial.requestPort().then(selectedPort => {
+      port = selectedPort;
+      this.style = "visibility: hidden";
+      connect();
+    });
+  }
+
+  document.querySelector("#submit").onclick = () => {
+    let source = document.querySelector("#input").value;
+    send(source);
+  }
+
+  document.querySelector("#send-alphabet").onclick = () => {
+    if (!port) return;
+    let alphabet = 'abcdefghijklmnopqrstuvwxyz';
+    let encoder = new TextEncoder('utf-8');
+    let t0 = performance.now();
+    let chain = Promise.resolve();
+    for (let i = 0; i < alphabet.length; i++) {
+      chain = chain.then(() => port.send(encoder.encode(alphabet[i])));
+    }
+    chain.then(() => {
+      console.log('Send alphabet total: ' + (performance.now() - t0).toFixed(1) + ' ms');
+    });
+  }
+}
+
+</script>
+ <p>Instructions:</p>
+ <p>
+  - Build the Zephyr WebUSB serial example on a compatible board (e.g. Raspberry Pi Pico) as shown at the end of this page.<br>
+  - Open the dev console to see the WebUSB transfer times.<br>
+  - Click "Connect To WebUSB Device" and select the device from the popup.<br>
+  - Click on "Send Alphabet" to send the alphabet one character at a time.<br>
+  - Look at the console to see the transfer times for each character, and the total time to send the whole alphabet.<br>
+ </p>
+ <button id="connect" style="visibility: initial">Connect To WebUSB Device</button>
+ <button id="send-alphabet">Send Alphabet</button>
+ <br><br><label for="input">Sender: </label> <br>
+ <textarea id="input" rows="25" cols="80">WebUSB!</textarea>
+ <br><button id="submit">Send</button>
+ <br><br>
+ <label for="output">Receiver: </label> <br>
+ <textarea id="output" rows="25" cols="80"></textarea>
+ <p>Tested with a Raspberry Pi Pico and the default WebUSB serial example:</p>
+ <pre><code>
+    $ docker run --rm -it \
+    -v $(pwd):/workdir \
+    -w /workdir \
+    ghcr.io/zephyrproject-rtos/zephyr-build:main \
+    bash
+ </code></pre>
+ <p>And inside the container:</p>
+ <pre><code>
+    west init .
+    west update hal_rpi_pico cmsis mbedtls
+    west build -b rpi_pico zephyr/samples/subsys/usb/webusb
+ </code></pre>
+</body>
+</html>
